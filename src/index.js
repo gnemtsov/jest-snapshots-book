@@ -1,7 +1,6 @@
 const fs = require('fs');
 
 module.exports = class SnapshotsBook {
-
     constructor(globalConfig, options) {
         this._globalConfig = globalConfig;
         this._options = options;
@@ -79,7 +78,7 @@ module.exports = class SnapshotsBook {
         if (toc.length) {
             let content = `
                 <h1>The book of snapshots</h1>\n
-                <h3 style="background-color: #d5cfcf; padding: 0.6rem;">Table of contents</h3>\n
+                <h3 style="background-color: #d6cfcf; padding: 0.6rem;">Table of contents</h3>\n
                 ${toc.map(t => `<div style="font-size: 1.2rem; margin-left: 1rem;"><a href="${t.file}.html">${t.name}</a></div>\n`)}
             `;
             fs.writeFileSync(`${dir}/index.html`, this.getHTMLPage('The book of snapshots', '', content));
