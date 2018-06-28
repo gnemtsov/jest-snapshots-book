@@ -7,6 +7,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var fs = require('fs');
+var path = require('path');
 
 module.exports = function () {
     function SnapshotsBook(globalConfig, options) {
@@ -19,9 +20,62 @@ module.exports = function () {
     }
 
     _createClass(SnapshotsBook, [{
+        key: 'log',
+        value: function log(message) {
+            console.log(message);
+        }
+    }, {
         key: 'getHTMLPage',
         value: function getHTMLPage(title, css, content) {
             return '\n            <!doctype html>\n            <html lang="en">\n                <head>\n                    <meta charset="utf-8">\n                    <title>' + title + '</title>\n                    <style>' + css + '</style>\n                </head>\n                <body>\n                    ' + content + '\n                </body>\n            </html>\n        ';
+        }
+    }, {
+        key: 'grabCSS',
+        value: function grabCSS(moduleName) {
+            var css = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
+            var level = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : 0;
+
+            var tab = '  ';
+            var indent = '';
+            for (var i = 0; i < level; i++) {
+                indent += tab;
+            }
+
+            var src = '';
+            try {
+                src = fs.readFileSync(moduleName, 'utf8');
+                this.log(indent + '--> Opened module ' + path.basename(moduleName));
+            } catch (e) {
+                this.log(indent + '--x Failed to open module ' + path.basename(moduleName));
+            }
+
+            if (src !== '') {
+                indent += tab;
+                var importReg = /import.+?from\s+['"](.+?)['"]/ig;
+                var result = void 0;
+                while (true) {
+                    result = importReg.exec(src);
+                    if (result === null) {
+                        break;
+                    }
+
+                    var fileName = path.resolve(path.dirname(moduleName), result[1]);
+                    var ext = path.extname(fileName);
+                    if (ext === '.css') {
+                        var cssSrc = '';
+                        try {
+                            cssSrc = fs.readFileSync(fileName, 'utf8');
+                            this.log(indent + '--> Grabed css file ' + path.basename(fileName));
+                        } catch (e) {
+                            this.log(indent + '--x Failed to open css file ' + path.basename(fileName));
+                        }
+                        css.push(cssSrc);
+                    } else {
+                        css = this.grabCSS(fileName + (ext ? '' : '.js'), css, level + 1);
+                    }
+                }
+            }
+            return css;
         }
     }, {
         key: 'onRunComplete',
@@ -29,9 +83,10 @@ module.exports = function () {
             var _this = this;
 
             var toc = [];
-            var dir = 'snapshots-book';
+
+            var bookDir = 'snapshots-book';
             try {
-                fs.mkdirSync(dir);
+                fs.mkdirSync(bookDir);
             } catch (e) {
                 if (e.code !== 'EEXIST') {
                     throw e;
@@ -46,25 +101,24 @@ module.exports = function () {
                 var _loop = function _loop() {
                     var testFilePath = _step.value.testFilePath;
 
-                    var _$exec = /^(.+)\\(.+)$/i.exec(testFilePath),
-                        _$exec2 = _slicedToArray(_$exec, 3),
-                        path = _$exec2[1],
-                        file = _$exec2[2];
+                    var _path$parse = path.parse(testFilePath),
+                        dir = _path$parse.dir,
+                        base = _path$parse.base;
 
-                    var _$exec3 = /^(.+)\.(test|spec)\.(js|jsx)$/i.exec(file),
-                        _$exec4 = _slicedToArray(_$exec3, 2),
-                        name = _$exec4[1];
+                    var _$exec = /^(.+)\.(test|spec)\.(js|jsx)$/i.exec(base),
+                        _$exec2 = _slicedToArray(_$exec, 2),
+                        name = _$exec2[1];
 
-                    var css = void 0;
-                    try {
-                        css = fs.readFileSync(path + '\\' + name + '.css', 'utf8');
-                    } catch (e) {
-                        css = '';
+                    if (name === undefined) {
+                        console.log('File name can\'t be parsed for test file: ' + testFilePath);
+                        return 'break';
                     }
+
+                    var css = _this.grabCSS(testFilePath);
 
                     var snapshots = {};
                     try {
-                        var snap = fs.readFileSync(path + '\\__snapshots__\\' + file + '.snap', 'utf8');
+                        var snap = fs.readFileSync(path.join(dir, '__snapshots__', base + '.snap'), 'utf8');
                         // eslint-disable-next-line no-new-func
                         var populate = new Function('exports', snap);
                         populate(snapshots);
@@ -73,20 +127,22 @@ module.exports = function () {
                     var tests = Object.keys(snapshots);
                     if (tests.length) {
                         var _content = tests.map(function (test) {
-                            return '\n                        <div style="margin-top: 1.5rem; border-top: 4px dashed red;">\n                            <div style="background-color: #f38787; padding: 0.6rem;">' + test + '</div>\n\n                            ' + snapshots[test].replace(/src=".+"/g, 'src="' + _this.dumpSvg + '"').replace(/className="/g, 'class="') + '\n                        </div>\n                    ';
+                            return '\n                        <div style="margin-top: 1.5rem; border-top: 4px dashed red;">\n                            <div style="background-color: #f38787; padding: 0.6rem; margin-bottom: 0.6rem;">' + test + '</div>\n\n                            ' + snapshots[test].replace(/src=".+"/g, 'src="' + _this.dumpSvg + '"').replace(/className="/g, 'class="') + '\n                        </div>\n                    ';
                         }).join('\n\n');
 
-                        fs.writeFileSync(dir + '/' + file + '.html', _this.getHTMLPage(name, css, _content));
-                        toc.push({ file: file, name: name });
+                        fs.writeFileSync(path.join(bookDir, base + '.html'), _this.getHTMLPage(name, css.join(''), _content));
+                        toc.push({ base: base, name: name });
                     } else {
                         try {
-                            fs.unlinkSync(dir + '/' + file + '.html');
+                            fs.unlinkSync(path.join(bookDir, base + '.html'));
                         } catch (e) {}
                     }
                 };
 
                 for (var _iterator = results.testResults[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                    _loop();
+                    var _ret = _loop();
+
+                    if (_ret === 'break') break;
                 }
             } catch (err) {
                 _didIteratorError = true;
@@ -104,12 +160,12 @@ module.exports = function () {
             }
 
             if (toc.length) {
-                var content = '\n                <h1>The book of snapshots</h1>\n\n                <h3 style="background-color: #d6cfcf; padding: 0.6rem;">Table of contents</h3>\n\n                ' + toc.map(function (t) {
-                    return '<div style="font-size: 1.2rem; margin-left: 1rem;"><a href="' + t.file + '.html">' + t.name + '</a></div>\n';
-                }) + '\n            ';
-                fs.writeFileSync(dir + '/index.html', this.getHTMLPage('The book of snapshots', '', content));
+                var content = '\n                   <h1>The book of snapshots</h1>\n\n                   <h3 style="background-color: #d6cfcf; padding: 0.6rem;">Table of contents</h3>\n\n                   ' + toc.map(function (t) {
+                    return '<div style="font-size: 1.2rem; margin-left: 1rem;"><a href="' + t.base + '.html">' + t.name + '</a></div>\n';
+                }) + '\n               ';
+                fs.writeFileSync(path.join(bookDir, 'index.html'), this.getHTMLPage('The book of snapshots', '', content));
             } else {
-                fs.writeFileSync(dir + '/index.html', 'No snapshots found.');
+                fs.writeFileSync(path.join(bookDir, 'index.html'), 'No snapshots found.');
             }
         }
     }, {
