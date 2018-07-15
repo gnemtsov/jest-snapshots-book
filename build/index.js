@@ -1,3 +1,5 @@
+//TODO adjust iframe height by content height (see https://stackoverflow.com/a/23020025/1858818).
+
 const fs = require('fs');
 const path = require('path');
 
@@ -49,15 +51,26 @@ module.exports = class SnapshotsBook {
                 font-size: 1.2rem; 
                 margin-left: 1rem;
             }
-       
-            .TestResultContainer{
-                margin-top: 1.5rem;
+
+            .SubHeader{ padding: 0.6rem; background-color: #d1d1d1; }
+
+            .TestResultContainer{ margin-top: 1.5rem; }
+            .TestHeader.passed{ padding: 0.6rem; background-color: #99e99b; }
+            .TestHeader.failed{ padding: 0.6rem; background-color: #ff9f9f; }
+            .TestResult{
+                display: flex;
+                justify-content: space-around;                
             }
 
-            .SubHeader{
-                background-color: #d6cfcf; 
-                padding: 0.6rem; 
-                margin-bottom: 0.6rem;
+            .ExpectedContainer, .ActualContainer {
+                padding: 0.6rem;
+                width: 100%;
+            }
+            .ExpectedHeader, .ActualHeader { color: #4c4c4c; }
+            .ExpectedContainer iframe, .ActualContainer iframe{
+                width: 100%;
+                height: 350px;
+                border: 1px solid #beb6b6;
             }
         `;
     }
@@ -193,7 +206,7 @@ module.exports = class SnapshotsBook {
                 result.expected = snapshots[key].trim().split('\n');
 
                 if (result.status === 'failed') {
-                    result.diff = [];
+                    result.diffs = [];
                     result.actual = [];
                     result.failureMessages.forEach(message => {
                         const ansiColorsStylesPattern = ['[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:[a-zA-Z\\d]*(?:;[a-zA-Z\\d]*)*)?\\u0007)', '(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PRZcf-ntqry=><~]))'].join('|');
@@ -242,26 +255,36 @@ module.exports = class SnapshotsBook {
                         }, []);
                         const toAppend = result.expected.slice(expPassed, result.expected.length - 1);
                         result.actual = result.actual.concat(toAppend);
-                        result.diff.push(lines);
+                        result.diffs = result.diffs.concat(lines);
                     });
                 }
 
-                result.expected = result.expected.join('\n');
-                result.diff = result.diff.join('\n');
-                result.actual = result.actual.join('\n');
-
+                //prepare path for results
                 const testPath = path.join(this.bookDir, name, testCounter.toString());
                 this.mkDirByPathSync(testPath);
 
-                //output expected
-                const expCss = css.concat([`
-                    #html-container {
-                        display: block;
+                //CSS of IFrame content (contains grabbed css + additional styles)
+                const iFrameContentCss = css.concat([`
+                    .LNum {
+                        color: #666;
+                        margin: 0 1rem 0 0.5rem;
                     }
-                    #raw-container {
+                    .yellow {
+                        color: #d5a207;
+                        font-weight: bold;
+                    }
+                    .green { color: green; }
+                    .red { color: red; }
+                    #html-container { display: block; }
+                    #raw-container, #diff-container {
                         display: none;
+                        font-family: monospace;
+                        white-space: pre;
                     }
                 `]).join('');
+
+                //-----> output expected
+                let expectedContainerHtml = '';
 
                 const expJs = `
                     document.addEventListener("click", function() {
@@ -277,76 +300,94 @@ module.exports = class SnapshotsBook {
                     });
                 `;
                 const expHtml = `
-                    <div id="html-container">
-                        ${result.expected}
-                    </div>
-                    <div id="raw-container">
-                        <pre>${result.expected.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)};`)}</pre>
+                    <div id="html-container">${result.expected.join('\n')}</div>
+                    <div id="raw-container">${result.expected.map((line, i) => {
+                    const num = i + 1;
+                    line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
+                    return `<span class="LNum">${num}</span>${line}`;
+                }).join('</br>')}</div>
+                `;
+
+                fs.writeFileSync(path.join(testPath, 'expected.html'), this.getHTMLPage(name, iFrameContentCss, expJs, expHtml));
+
+                expectedContainerHtml = `
+                    <div class="ExpectedContainer">
+                        <div class="ExpectedHeader">${result.status === 'failed' ? 'Expected' : ''}</div>
+                        <iframe src="${testCounter}/expected.html">
+                            Browser should support iframes.
+                        </iframe>
                     </div>
                 `;
 
-                fs.writeFileSync(path.join(testPath, 'expected.html'), this.getHTMLPage(name, expCss, expJs, expHtml));
-
-                //output actual
-                const actCss = css.concat([`
-                    #html-container {
-                        display: block;
-                    }
-                    #diff-container, #raw-container {
-                        display: none;
-                    }
-                `]).join('');
-
-                const actJs = `
-                    document.addEventListener("click", function() {
-                        var htmlContainer = document.getElementById('html-container');
-                        var rawContainer = document.getElementById('raw-container');
-                        var diffContainer = document.getElementById('diff-container');
-                        if(diffContainer.style.display === 'block'){
-                            htmlContainer.style.display = 'block';
-                            rawContainer.style.display = 'none';
-                            diffContainer.style.display = 'none';
-                        } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
-                            htmlContainer.style.display = 'none';
-                            rawContainer.style.display = 'block';
-                            diffContainer.style.display = 'none';
-                        } else if(rawContainer.style.display === 'block'){
-                            htmlContainer.style.display = 'none';
-                            rawContainer.style.display = 'none';
-                            diffContainer.style.display = 'block';
+                //-----> output actual
+                let actualContainerHtml = '';
+                if (result.status === 'failed') {
+                    const actJs = `
+                        document.addEventListener("click", function() {
+                            var htmlContainer = document.getElementById('html-container');
+                            var rawContainer = document.getElementById('raw-container');
+                            var diffContainer = document.getElementById('diff-container');
+                            if(diffContainer.style.display === 'block'){
+                                htmlContainer.style.display = 'block';
+                                rawContainer.style.display = 'none';
+                                diffContainer.style.display = 'none';
+                            } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
+                                htmlContainer.style.display = 'none';
+                                rawContainer.style.display = 'block';
+                                diffContainer.style.display = 'none';
+                            } else if(rawContainer.style.display === 'block'){
+                                htmlContainer.style.display = 'none';
+                                rawContainer.style.display = 'none';
+                                diffContainer.style.display = 'block';
+                            }
+                        });
+                    `;
+                    const actHtml = `
+                        <div id="html-container">${result.actual.join('\n')}</div>
+                        <div id="raw-container">${result.actual.map((line, i) => {
+                        const num = i + 1;
+                        line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
+                        return `<span class="LNum">${num}</span>${line}`;
+                    }).join('</br>')}</div>
+                        <div id="diff-container">${result.diffs.map(line => {
+                        let lineClass = '';
+                        if (/^@@ -\d+,\d+ \+\d+,\d+ @@$/.test(line)) {
+                            lineClass = 'yellow';
+                        } else if (/^-/.test(line)) {
+                            lineClass = 'green';
+                        } else if (/^\+/.test(line)) {
+                            lineClass = 'red';
                         }
-                    });
-                `;
-                const actHtml = `
-                    <div id="html-container">
-                        ${result.actual}
-                    </div>
-                    <div id="raw-container">
-                        <pre>${result.actual.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)};`)}</pre>
-                    </div>
-                    <div id="diff-container">
-                        ${result.diff}
-                    </div>
-                `;
+                        line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
+                        return `<span class="${lineClass}">${line}</span>`;
+                    }).join('</br>')}</div>
+                    `;
 
-                fs.writeFileSync(path.join(testPath, 'actual.html'), this.getHTMLPage(name, actCss, actJs, actHtml));
+                    fs.writeFileSync(path.join(testPath, 'actual.html'), this.getHTMLPage(name, iFrameContentCss, actJs, actHtml));
 
-                //prepare iframes
-                testResultContainers.push(`
-                    <div class="TestResultContainer">
-                        <div class="SubHeader ${result.status}">${result.title}</div>
-                        <div class="TestResult">
-                            <iframe src="${testCounter}/expected.html">
-                                Browser should support iframes.
-                            </iframe>
+                    actualContainerHtml = `
+                        <div class="ActualContainer">
+                            <div class="ActualHeader">Actual</div>
                             <iframe src="${testCounter}/actual.html">
                                 Browser should support iframes.
                             </iframe>                
+                        </div>
+                    `;
+                }
+
+                //add iframes in testResultContainers
+                testResultContainers.push(`
+                    <div class="TestResultContainer">
+                        <div class="TestHeader ${result.status}">${result.title}</div>
+                        <div class="TestResult">
+                            ${expectedContainerHtml}
+                            ${actualContainerHtml}
                         </div>
                     </div>
                 `);
             });
 
+            //-----> output index.html with all testResultContainers
             const html = `
                 <h3>${name}</h3>
                 ${testResultContainers.join('\n')}
@@ -378,6 +419,7 @@ module.exports = class SnapshotsBook {
              */
         }
 
+        //-----> output table of contents
         if (toc.length) {
             let content = `
                     <h1>The book of snapshots</h1>\n
