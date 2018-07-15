@@ -1,30 +1,24 @@
 //TODO adjust iframe height by content height (see https://stackoverflow.com/a/23020025/1858818).
+//TODO add filter to show only passed|failed snapshots
 
 const fs = require('fs');
 const path = require('path');
-
-/* const {
-  green,
-  red,
-  gray,
-  cyan,
-  white,
-} = require('chalk');
-    log(gray(`Found ${numTotalTestSuites} test suites`));
- */
+const chalk = require('chalk');
 
 module.exports = class SnapshotsBook {
     constructor(globalConfig, options) {
         this._globalConfig = globalConfig;
         this._options = options;
-        console.log(this._options);
 
+        this.verbose = Boolean(this._options.verbose);
         this.bookDir = 'snapshots-book';
         //        this.dumpSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItY2FtZXJhIj48cGF0aCBkPSJNMjMgMTlhMiAyIDAgMCAxLTIgMkgzYTIgMiAwIDAgMS0yLTJWOGEyIDIgMCAwIDEgMi0yaDRsMi0zaDZsMiAzaDRhMiAyIDAgMCAxIDIgMnoiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjEzIiByPSI0Ij48L2NpcmNsZT48L3N2Zz4=';
     }
 
     log(message) {
-        console.log(message);
+        if (this.verbose) {
+            console.log(message);
+        }
     }
 
     getHTMLPage(title = '', css = '', js = '', content = '') {
@@ -107,7 +101,7 @@ module.exports = class SnapshotsBook {
 
     grabCSS(moduleName, css = [], level = 0) {
         const tab = '  ';
-        let indent = '';
+        let indent = tab;
         for (var i = 0; i < level; i++) {
             indent += tab;
         }
@@ -115,9 +109,13 @@ module.exports = class SnapshotsBook {
         let src = '';
         try {
             src = fs.readFileSync(moduleName, 'utf8');
-            this.log(`${indent}--> Opened module ${path.basename(moduleName)}`);
+            if (level === 0) {
+                this.log(`${indent}--> Opened module ${path.basename(moduleName)}`);
+            } else {
+                this.log(`${indent}--> Opened module ${path.basename(moduleName)}`);
+            }
         } catch (e) {
-            this.log(`${indent}--x Failed to open module ${path.basename(moduleName)}`);
+            this.log(chalk.gray(`${indent}--х Failed to open module ${path.basename(moduleName)}`));
         }
 
         if (src !== '') {
@@ -136,9 +134,9 @@ module.exports = class SnapshotsBook {
                     let cssSrc = '';
                     try {
                         cssSrc = fs.readFileSync(fileName, 'utf8');
-                        this.log(`${indent}--> Grabed css file ${path.basename(fileName)}`);
+                        this.log(`${indent}--> Grabed css file ${chalk.green(path.basename(fileName))}`);
                     } catch (e) {
-                        this.log(`${indent}--x Failed to open css file ${path.basename(fileName)}`);
+                        this.log(`${indent}--х Failed to open css file ${chalk.red(path.basename(fileName))}`);
                     }
                     css.push(cssSrc);
                 } else {
@@ -156,6 +154,8 @@ module.exports = class SnapshotsBook {
     }
 
     onRunComplete(contexts, results) {
+        this.log('\nJest-snapshots-book reporter is running...\n');
+
         let toc = [];
 
         try {
@@ -168,6 +168,58 @@ module.exports = class SnapshotsBook {
 
         this.emptyDirSync(this.bookDir);
 
+        let iFrameContentCss = `
+            .LNum {
+                color: #666;
+                margin: 0 1rem 0 0.5rem;
+            }
+            .yellow {
+                color: #d5a207;
+                font-weight: bold;
+            }
+            .green { color: green; }
+            .red { color: red; }
+            #html-container { display: block; }
+            #raw-container, #diff-container {
+                display: none;
+                font-family: monospace;
+                white-space: pre;
+            }
+        `;
+        const iFrameContentJSExpected = `
+            document.addEventListener("click", function() {
+                var htmlContainer = document.getElementById('html-container');
+                var rawContainer = document.getElementById('raw-container');
+                if(rawContainer.style.display === 'block'){
+                    htmlContainer.style.display = 'block';
+                    rawContainer.style.display = 'none';
+                } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
+                    htmlContainer.style.display = 'none';
+                    rawContainer.style.display = 'block';
+                }
+            });
+        `;
+        const iFrameContentJSActual = `
+            document.addEventListener("click", function() {
+                var htmlContainer = document.getElementById('html-container');
+                var rawContainer = document.getElementById('raw-container');
+                var diffContainer = document.getElementById('diff-container');
+                if(diffContainer.style.display === 'block'){
+                    htmlContainer.style.display = 'block';
+                    rawContainer.style.display = 'none';
+                    diffContainer.style.display = 'none';
+                } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
+                    htmlContainer.style.display = 'none';
+                    rawContainer.style.display = 'block';
+                    diffContainer.style.display = 'none';
+                } else if(rawContainer.style.display === 'block'){
+                    htmlContainer.style.display = 'none';
+                    rawContainer.style.display = 'none';
+                    diffContainer.style.display = 'block';
+                }
+            });
+        `;
+
         for (let { testFilePath, testResults } of results.testResults) {
             const { dir, base } = path.parse(testFilePath);
             const [, name] = /^(.+)\.(test|spec)\.(js|jsx)$/i.exec(base);
@@ -177,10 +229,17 @@ module.exports = class SnapshotsBook {
                 break;
             }
 
-            //grab styles recursively
-            const css = this.grabCSS(testFilePath);
+            this.log(`Process test file ${chalk.bgGreen.black(base)}`);
+
+            //CSS of IFrame content (contains grabbed css + additional styles)
+            this.log('Grab styles');
+            iFrameContentCss =
+                this.grabCSS(testFilePath)
+                    .concat([iFrameContentCss])
+                    .join('');
 
             //populate snapshots from *.snap file
+            this.log(`Populate snapshots from ${base}.snap`);
             let snapshots = {};
             try {
                 const snap = fs.readFileSync(path.join(dir, '__snapshots__', `${base}.snap`), 'utf8');
@@ -190,6 +249,7 @@ module.exports = class SnapshotsBook {
             } catch (e) { }
 
             //make expected, actual snapshots and diff
+            this.log('Prepare expected and actual');
             let testResultContainers = [];
             const snapshotsKeys = Object.keys(snapshots);
             let testCounter = 0;
@@ -266,42 +326,8 @@ module.exports = class SnapshotsBook {
                 const testPath = path.join(this.bookDir, name, testCounter.toString());
                 this.mkDirByPathSync(testPath);
 
-                //CSS of IFrame content (contains grabbed css + additional styles)
-                const iFrameContentCss = css.concat([`
-                    .LNum {
-                        color: #666;
-                        margin: 0 1rem 0 0.5rem;
-                    }
-                    .yellow {
-                        color: #d5a207;
-                        font-weight: bold;
-                    }
-                    .green { color: green; }
-                    .red { color: red; }
-                    #html-container { display: block; }
-                    #raw-container, #diff-container {
-                        display: none;
-                        font-family: monospace;
-                        white-space: pre;
-                    }
-                `]).join('');
 
                 //-----> output expected
-                let expectedContainerHtml = '';
-
-                const expJs = `
-                    document.addEventListener("click", function() {
-                        var htmlContainer = document.getElementById('html-container');
-                        var rawContainer = document.getElementById('raw-container');
-                        if(rawContainer.style.display === 'block'){
-                            htmlContainer.style.display = 'block';
-                            rawContainer.style.display = 'none';
-                        } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
-                            htmlContainer.style.display = 'none';
-                            rawContainer.style.display = 'block';
-                        }
-                    });
-                `
                 const expHtml = `
                     <div id="html-container">${result.expected.join('\n')}</div>
                     <div id="raw-container">${result.expected.map((line, i) => {
@@ -314,10 +340,10 @@ module.exports = class SnapshotsBook {
 
                 fs.writeFileSync(
                     path.join(testPath, 'expected.html'),
-                    this.getHTMLPage(name, iFrameContentCss, expJs, expHtml)
+                    this.getHTMLPage(name, iFrameContentCss, iFrameContentJSExpected, expHtml)
                 );
 
-                expectedContainerHtml = `
+                let expectedContainerHtml = `
                     <div class="ExpectedContainer">
                         <div class="ExpectedHeader">${result.status === 'failed' ? 'Expected' : ''}</div>
                         <iframe src="${testCounter}/expected.html">
@@ -329,26 +355,6 @@ module.exports = class SnapshotsBook {
                 //-----> output actual
                 let actualContainerHtml = '';
                 if (result.status === 'failed') {
-                    const actJs = `
-                        document.addEventListener("click", function() {
-                            var htmlContainer = document.getElementById('html-container');
-                            var rawContainer = document.getElementById('raw-container');
-                            var diffContainer = document.getElementById('diff-container');
-                            if(diffContainer.style.display === 'block'){
-                                htmlContainer.style.display = 'block';
-                                rawContainer.style.display = 'none';
-                                diffContainer.style.display = 'none';
-                            } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
-                                htmlContainer.style.display = 'none';
-                                rawContainer.style.display = 'block';
-                                diffContainer.style.display = 'none';
-                            } else if(rawContainer.style.display === 'block'){
-                                htmlContainer.style.display = 'none';
-                                rawContainer.style.display = 'none';
-                                diffContainer.style.display = 'block';
-                            }
-                        });
-                    `
                     const actHtml = `
                         <div id="html-container">${result.actual.join('\n')}</div>
                         <div id="raw-container">${result.actual.map((line, i) => {
@@ -374,7 +380,7 @@ module.exports = class SnapshotsBook {
 
                     fs.writeFileSync(
                         path.join(testPath, 'actual.html'),
-                        this.getHTMLPage(name, iFrameContentCss, actJs, actHtml)
+                        this.getHTMLPage(name, iFrameContentCss, iFrameContentJSActual, actHtml)
                     );
 
                     actualContainerHtml = `
@@ -401,18 +407,19 @@ module.exports = class SnapshotsBook {
             });
 
             //-----> output index.html with all testResultContainers
+            const testResultPagePath = path.join(this.bookDir, name, `index.html`);
+            this.log(`Write page with test results to ${testResultPagePath}`);
             const html = `
                 <h3>${name}</h3>
                 ${testResultContainers.join('\n')}
             `;
 
             fs.writeFileSync(
-                path.join(this.bookDir, name, `index.html`),
+                testResultPagePath,
                 this.getHTMLPage(name, this.getMainCSS(), null, html)
             );
 
             toc.push({ base, name });
-
 
             /*             const tests = Object.keys(snapshots);
                         if (tests.length) {
@@ -437,6 +444,8 @@ module.exports = class SnapshotsBook {
         }
 
         //-----> output table of contents
+        const tocPagePath = path.join(this.bookDir, 'index.html');
+        this.log(`\nWrite TOC to ${tocPagePath}\n`);
         if (toc.length) {
             let content = `
                     <h1>The book of snapshots</h1>\n
@@ -445,10 +454,12 @@ module.exports = class SnapshotsBook {
                         ${toc.map(t => `<a href="${t.name}/index.html">${t.name}</a>\n`)}
                     </div>
                `;
-            fs.writeFileSync(path.join(this.bookDir, 'index.html'), this.getHTMLPage('The book of snapshots', this.getMainCSS(), null, content));
+            fs.writeFileSync(tocPagePath, this.getHTMLPage('The book of snapshots', this.getMainCSS(), null, content));
         } else {
-            fs.writeFileSync(path.join(this.bookDir, 'index.html'), 'No snapshots found.');
+            fs.writeFileSync(tocPagePath, 'No snapshots found.');
         }
+
+        this.log('Jest-snapshots-book finished.');
     }
 
     getLastError() {
