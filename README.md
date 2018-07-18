@@ -20,3 +20,17 @@ Add after default jest reporters in jest configuration
     ]
 
 ```
+
+
+    "modulePathIgnorePatterns": [
+        "<rootDir>/snapshots-book"
+    ],
+    "watchPathIgnorePatterns": [
+        "<rootDir>/snapshots-book"
+    ],
+
+     "reporters": [
+      "default",
+      ["jest-snapshots-book", {"verbose": true}]
+    ]
+   

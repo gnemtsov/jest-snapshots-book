@@ -1,5 +1,6 @@
 //TODO adjust iframe height by content height (see https://stackoverflow.com/a/23020025/1858818).
-//TODO add filter to show only passed|failed snapshots
+//TODO highlight changed lines in raw format
+//TODO indent table contents to reflect component hierarchy
 
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +12,76 @@ module.exports = class SnapshotsBook {
         this._options = options;
 
         this.verbose = Boolean(this._options.verbose);
+
         this.bookDir = 'snapshots-book';
+        this.mainCss = `
+            .TOCContainer a{
+                display:block;
+                font-size: 1.2rem; 
+                margin-left: 1rem;
+            }
+
+            .SubHeader{ padding: 0.6rem; background-color: #d1d1d1; }
+            .Filters span { margin-left: 1rem; }
+
+            .TestResultContainer{ margin-top: 1.5rem; }
+            .TestResultContainer.passed .TestHeader{ padding: 0.6rem; background-color: #99e99b; }
+            .TestResultContainer.failed .TestHeader{ padding: 0.6rem; background-color: #ff9f9f; }
+            .TestResult{
+                display: flex;
+                justify-content: space-around;                
+            }
+
+            .ExpectedContainer, .ActualContainer {
+                padding: 0.6rem;
+                width: 100%;
+            }
+            .ExpectedHeader, .ActualHeader { color: #4c4c4c; }
+            .ExpectedContainer iframe, .ActualContainer iframe{
+                width: 100%;
+                height: 350px;
+                border: 1px solid #beb6b6;
+            }
+        `;
+        this.mainJs = `
+            document.addEventListener("DOMContentLoaded", function(){
+                document.getElementById('show-all').addEventListener("click", function(e) {
+                    e.preventDefault();
+                    var resultContainers = document.getElementsByClassName("TestResultContainer");
+                    for (var i = 0; i < resultContainers.length; ++i) {
+                        var el = resultContainers[i];
+                        el.style.display = 'block';
+                    }                    
+                });
+
+                document.getElementById('show-passed').addEventListener("click", function(e) {
+                    e.preventDefault();
+                    var resultContainers = document.getElementsByClassName("TestResultContainer");
+                    for (var i = 0; i < resultContainers.length; ++i) {
+                        var el = resultContainers[i];
+                        if(el.classList.contains('passed')){
+                            el.style.display = 'block';
+                        } else {
+                            el.style.display = 'none';
+                        }
+                    }                    
+                });
+
+                document.getElementById('show-failed').addEventListener("click", function(e) {
+                    e.preventDefault();
+                    var resultContainers = document.getElementsByClassName("TestResultContainer");
+                    for (var i = 0; i < resultContainers.length; ++i) {
+                        var el = resultContainers[i];
+                        if(el.classList.contains('failed')){
+                            el.style.display = 'block';
+                        } else {
+                            el.style.display = 'none';
+                        }
+                    };
+                });               
+            });
+        `;
+
         //        this.dumpSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItY2FtZXJhIj48cGF0aCBkPSJNMjMgMTlhMiAyIDAgMCAxLTIgMkgzYTIgMiAwIDAgMS0yLTJWOGEyIDIgMCAwIDEgMi0yaDRsMi0zaDZsMiAzaDRhMiAyIDAgMCAxIDIgMnoiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjEzIiByPSI0Ij48L2NpcmNsZT48L3N2Zz4=';
     }
 
@@ -31,41 +101,8 @@ module.exports = class SnapshotsBook {
                     <style>${css}</style>
                     <script>${js}</script>
                 </head>
-                <body>
-                    ${content}
-                </body>
+                <body>${content}</body>
             </html>
-        `;
-    }
-
-    getMainCSS() {
-        return `
-            .TOCContainer a{
-                display:block;
-                font-size: 1.2rem; 
-                margin-left: 1rem;
-            }
-
-            .SubHeader{ padding: 0.6rem; background-color: #d1d1d1; }
-
-            .TestResultContainer{ margin-top: 1.5rem; }
-            .TestHeader.passed{ padding: 0.6rem; background-color: #99e99b; }
-            .TestHeader.failed{ padding: 0.6rem; background-color: #ff9f9f; }
-            .TestResult{
-                display: flex;
-                justify-content: space-around;                
-            }
-
-            .ExpectedContainer, .ActualContainer {
-                padding: 0.6rem;
-                width: 100%;
-            }
-            .ExpectedHeader, .ActualHeader { color: #4c4c4c; }
-            .ExpectedContainer iframe, .ActualContainer iframe{
-                width: 100%;
-                height: 350px;
-                border: 1px solid #beb6b6;
-            }
         `;
     }
 
@@ -75,27 +112,30 @@ module.exports = class SnapshotsBook {
 
         dir.split(sep).reduce((parentDir, childDir) => {
             const curDir = path.resolve('.', parentDir, childDir);
-            try {
+            if (!fs.existsSync(curDir)) {
                 fs.mkdirSync(curDir);
-            } catch (err) {
-                if (err.code !== 'EEXIST') {
-                    throw err;
-                }
             }
             return curDir;
         }, initDir);
     }
 
-    emptyDirSync(dir) {
+    emptyDirSync(dir, level = 0) {
         if (fs.existsSync(dir)) {
             fs.readdirSync(dir).forEach(file => {
                 const curPath = path.join(dir, file);
                 if (fs.lstatSync(curPath).isDirectory()) {
-                    this.emptyDirSync(curPath);
+                    this.emptyDirSync(curPath, level + 1);
                 } else {
-                    fs.unlinkSync(curPath);
+                    try {
+                        fs.unlinkSync(curPath);
+                    } catch (err) {}
                 }
             });
+            if (level > 0) {
+                try {
+                    fs.rmdirSync(dir);
+                } catch (err) {}
+            }
         }
     }
 
@@ -155,19 +195,9 @@ module.exports = class SnapshotsBook {
 
     onRunComplete(contexts, results) {
         this.log('\nJest-snapshots-book reporter is running...\n');
-
-        let toc = [];
-
-        try {
-            fs.mkdirSync(this.bookDir);
-        } catch (e) {
-            if (e.code !== 'EEXIST') {
-                throw e;
-            }
-        }
-
         this.emptyDirSync(this.bookDir);
 
+        let toc = [];
         let iFrameContentCss = `
             .LNum {
                 color: #666;
@@ -179,44 +209,16 @@ module.exports = class SnapshotsBook {
             }
             .green { color: green; }
             .red { color: red; }
-            #html-container { display: block; }
-            #raw-container, #diff-container {
-                display: none;
+        `;
+        const cssForRawAndDiff = `
+            body {
                 font-family: monospace;
                 white-space: pre;
             }
         `;
-        const iFrameContentJSExpected = `
+        const iFrameContentJS = nextPage => `
             document.addEventListener("click", function() {
-                var htmlContainer = document.getElementById('html-container');
-                var rawContainer = document.getElementById('raw-container');
-                if(rawContainer.style.display === 'block'){
-                    htmlContainer.style.display = 'block';
-                    rawContainer.style.display = 'none';
-                } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
-                    htmlContainer.style.display = 'none';
-                    rawContainer.style.display = 'block';
-                }
-            });
-        `;
-        const iFrameContentJSActual = `
-            document.addEventListener("click", function() {
-                var htmlContainer = document.getElementById('html-container');
-                var rawContainer = document.getElementById('raw-container');
-                var diffContainer = document.getElementById('diff-container');
-                if(diffContainer.style.display === 'block'){
-                    htmlContainer.style.display = 'block';
-                    rawContainer.style.display = 'none';
-                    diffContainer.style.display = 'none';
-                } else if (htmlContainer.style.display === 'block' || htmlContainer.style.display === ''){
-                    htmlContainer.style.display = 'none';
-                    rawContainer.style.display = 'block';
-                    diffContainer.style.display = 'none';
-                } else if(rawContainer.style.display === 'block'){
-                    htmlContainer.style.display = 'none';
-                    rawContainer.style.display = 'none';
-                    diffContainer.style.display = 'block';
-                }
+                location = "${nextPage}";
             });
         `;
 
@@ -251,7 +253,29 @@ module.exports = class SnapshotsBook {
             this.log('Prepare expected and actual');
             let testResultContainers = [];
             const snapshotsKeys = Object.keys(snapshots);
-            let testCounter = 0;
+            let counters = {
+                _total: 0,
+                get total() {
+                    return this._total.toString();
+                },
+                set total(v) {
+                    return this._total = v;
+                },
+                _passed: 0,
+                get passed() {
+                    return this._passed.toString();
+                },
+                set passed(v) {
+                    return this._passed = v;
+                },
+                _failed: 0,
+                get failed() {
+                    return this._failed.toString();
+                },
+                set failed(v) {
+                    return this._failed = v;
+                }
+            };
             testResults.forEach(result => {
                 const keyRegExp = new RegExp(`^${result.fullName} \\d+$`);
                 const key = snapshotsKeys.find(k => keyRegExp.test(k));
@@ -259,10 +283,11 @@ module.exports = class SnapshotsBook {
                     return;
                 }
 
-                testCounter++;
+                counters.total++;
                 result.expected = snapshots[key].trim().split('\n');
 
                 if (result.status === 'failed') {
+                    counters.failed++;
                     result.diffs = [];
                     result.actual = [];
                     result.failureMessages.forEach(message => {
@@ -314,28 +339,27 @@ module.exports = class SnapshotsBook {
                         result.actual = result.actual.concat(toAppend);
                         result.diffs = result.diffs.concat(lines);
                     });
+                } else {
+                    counters.passed++;
                 }
 
                 //prepare path for results
-                const testPath = path.join(this.bookDir, name, testCounter.toString());
+                const testPath = path.join(this.bookDir, name, counters.total);
                 this.mkDirByPathSync(testPath);
 
                 //-----> output expected
-                const expHtml = `
-                    <div id="html-container">${result.expected.join('\n')}</div>
-                    <div id="raw-container">${result.expected.map((line, i) => {
+                fs.writeFileSync(path.join(testPath, 'expectedHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('expectedRaw.html'), result.expected.join('\n')));
+
+                fs.writeFileSync(path.join(testPath, 'expectedRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('expectedHtml.html'), result.expected.map((line, i) => {
                     const num = i + 1;
                     line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
                     return `<span class="LNum">${num}</span>${line}`;
-                }).join('</br>')}</div>
-                `;
-
-                fs.writeFileSync(path.join(testPath, 'expected.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJSExpected, expHtml));
+                }).join('</br>')));
 
                 let expectedContainerHtml = `
                     <div class="ExpectedContainer">
                         <div class="ExpectedHeader">${result.status === 'failed' ? 'Expected' : ''}</div>
-                        <iframe src="${testCounter}/expected.html">
+                        <iframe src="${counters.total}/expectedHtml.html">
                             Browser should support iframes.
                         </iframe>
                     </div>
@@ -344,14 +368,15 @@ module.exports = class SnapshotsBook {
                 //-----> output actual
                 let actualContainerHtml = '';
                 if (result.status === 'failed') {
-                    const actHtml = `
-                        <div id="html-container">${result.actual.join('\n')}</div>
-                        <div id="raw-container">${result.actual.map((line, i) => {
+                    fs.writeFileSync(path.join(testPath, 'actualHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('actualRaw.html'), result.actual.join('\n')));
+
+                    fs.writeFileSync(path.join(testPath, 'actualRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualDiff.html'), result.actual.map((line, i) => {
                         const num = i + 1;
                         line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
                         return `<span class="LNum">${num}</span>${line}`;
-                    }).join('</br>')}</div>
-                        <div id="diff-container">${result.diffs.map(line => {
+                    }).join('</br>')));
+
+                    fs.writeFileSync(path.join(testPath, 'actualDiff.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualHtml.html'), result.diffs.map(line => {
                         let lineClass = '';
                         if (/^@@ -\d+,\d+ \+\d+,\d+ @@$/.test(line)) {
                             lineClass = 'yellow';
@@ -362,15 +387,12 @@ module.exports = class SnapshotsBook {
                         }
                         line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
                         return `<span class="${lineClass}">${line}</span>`;
-                    }).join('</br>')}</div>
-                    `;
-
-                    fs.writeFileSync(path.join(testPath, 'actual.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJSActual, actHtml));
+                    }).join('</br>')));
 
                     actualContainerHtml = `
                         <div class="ActualContainer">
                             <div class="ActualHeader">Actual</div>
-                            <iframe src="${testCounter}/actual.html">
+                            <iframe src="${counters.total}/actualHtml.html">
                                 Browser should support iframes.
                             </iframe>                
                         </div>
@@ -379,8 +401,8 @@ module.exports = class SnapshotsBook {
 
                 //add iframes in testResultContainers
                 testResultContainers.push(`
-                    <div class="TestResultContainer">
-                        <div class="TestHeader ${result.status}">${result.title}</div>
+                    <div class="TestResultContainer ${result.status}">
+                        <div class="TestHeader">${result.title}</div>
                         <div class="TestResult">
                             ${expectedContainerHtml}
                             ${actualContainerHtml}
@@ -390,14 +412,22 @@ module.exports = class SnapshotsBook {
             });
 
             //-----> output index.html with all testResultContainers
-            const testResultPagePath = path.join(this.bookDir, name, `index.html`);
-            this.log(`Write page with test results to ${testResultPagePath}`);
+            const testResultPagePath = path.join(this.bookDir, name);
+            this.log(`Write page with test results to ${path.join(testResultPagePath, 'index.html')}\n`);
             const html = `
-                <h3>${name}</h3>
+                <div><a href="../index.html">Table of contents</a></div>
+                <h1>${name}</h1>
+                <div class="Filters">
+                    Show 
+                    <span><a id="show-all" href="#">all</a>(${counters.total})</span>
+                    <span><a id="show-passed" href="#">passed</a>(${counters.passed})</span>
+                    <span><a id="show-failed" href="#">failed</a>(${counters.failed})</span>
+                </div>
                 ${testResultContainers.join('\n')}
             `;
 
-            fs.writeFileSync(testResultPagePath, this.getHTMLPage(name, this.getMainCSS(), null, html));
+            this.mkDirByPathSync(testResultPagePath);
+            fs.writeFileSync(path.join(testResultPagePath, 'index.html'), this.getHTMLPage(name, this.mainCss, this.mainJs, html));
 
             toc.push({ base, name });
 
@@ -424,19 +454,19 @@ module.exports = class SnapshotsBook {
         }
 
         //-----> output table of contents
-        const tocPagePath = path.join(this.bookDir, 'index.html');
-        this.log(`\nWrite TOC to ${tocPagePath}\n`);
+        this.log(`Write TOC to ${path.join(this.bookDir, 'index.html')}\n`);
         if (toc.length) {
-            let content = `
+            let html = `
                     <h1>The book of snapshots</h1>\n
                     <h3 class="SubHeader">Table of contents</h3>\n
                     <div class="TOCContainer">\n
-                        ${toc.map(t => `<a href="${t.name}/index.html">${t.name}</a>\n`)}
+                        ${toc.sort().map(t => `<a href="${t.name}/index.html">${t.name}</a>`).join('\n')}
                     </div>
                `;
-            fs.writeFileSync(tocPagePath, this.getHTMLPage('The book of snapshots', this.getMainCSS(), null, content));
+            this.mkDirByPathSync(this.bookDir);
+            fs.writeFileSync(path.join(this.bookDir, 'index.html'), this.getHTMLPage('The book of snapshots', this.mainCss, null, html));
         } else {
-            fs.writeFileSync(tocPagePath, 'No snapshots found.');
+            fs.writeFileSync(path.join(this.bookDir, 'index.html'), 'No snapshots found.');
         }
 
         this.log('Jest-snapshots-book finished.');
