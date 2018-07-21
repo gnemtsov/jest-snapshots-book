@@ -195,9 +195,10 @@ module.exports = class SnapshotsBook {
 
     onRunComplete(contexts, results) {
         this.log('\nJest-snapshots-book reporter is running...\n');
-        this.emptyDirSync(this.bookDir);
+        this.mkDirByPathSync(this.bookDir);
 
         let toc = [];
+
         let iFrameContentCss = `
             .LNum {
                 color: #666;
@@ -234,6 +235,11 @@ module.exports = class SnapshotsBook {
             }
 
             this.log(`Process test file ${chalk.bgGreen.black(base)}`);
+
+            //Clear dir
+            const testResultPagePath = path.join(this.bookDir, name);
+            this.emptyDirSync(testResultPagePath);
+            this.mkDirByPathSync(testResultPagePath);
 
             //CSS of IFrame content (contains grabbed css + additional styles)
             this.log('Grab styles');
@@ -348,9 +354,9 @@ module.exports = class SnapshotsBook {
                 this.mkDirByPathSync(testPath);
 
                 //-----> output expected
-                fs.writeFileSync(path.join(testPath, 'expectedHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('expectedRaw.html'), result.expected.join('\n')));
+                fs.writeFile(path.join(testPath, 'expectedHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('expectedRaw.html'), result.expected.join('\n')));
 
-                fs.writeFileSync(path.join(testPath, 'expectedRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('expectedHtml.html'), result.expected.map((line, i) => {
+                fs.writeFile(path.join(testPath, 'expectedRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('expectedHtml.html'), result.expected.map((line, i) => {
                     const num = i + 1;
                     line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
                     return `<span class="LNum">${num}</span>${line}`;
@@ -368,15 +374,15 @@ module.exports = class SnapshotsBook {
                 //-----> output actual
                 let actualContainerHtml = '';
                 if (result.status === 'failed') {
-                    fs.writeFileSync(path.join(testPath, 'actualHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('actualRaw.html'), result.actual.join('\n')));
+                    fs.writeFile(path.join(testPath, 'actualHtml.html'), this.getHTMLPage(name, iFrameContentCss, iFrameContentJS('actualRaw.html'), result.actual.join('\n')));
 
-                    fs.writeFileSync(path.join(testPath, 'actualRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualDiff.html'), result.actual.map((line, i) => {
+                    fs.writeFile(path.join(testPath, 'actualRaw.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualDiff.html'), result.actual.map((line, i) => {
                         const num = i + 1;
                         line = line.replace(/[\u00A0-\u9999<>\&]/gim, i => `&#${i.charCodeAt(0)}`);
                         return `<span class="LNum">${num}</span>${line}`;
                     }).join('</br>')));
 
-                    fs.writeFileSync(path.join(testPath, 'actualDiff.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualHtml.html'), result.diffs.map(line => {
+                    fs.writeFile(path.join(testPath, 'actualDiff.html'), this.getHTMLPage(name, iFrameContentCss + cssForRawAndDiff, iFrameContentJS('actualHtml.html'), result.diffs.map(line => {
                         let lineClass = '';
                         if (/^@@ -\d+,\d+ \+\d+,\d+ @@$/.test(line)) {
                             lineClass = 'yellow';
@@ -412,7 +418,6 @@ module.exports = class SnapshotsBook {
             });
 
             //-----> output index.html with all testResultContainers
-            const testResultPagePath = path.join(this.bookDir, name);
             this.log(`Write page with test results to ${path.join(testResultPagePath, 'index.html')}\n`);
             const html = `
                 <div><a href="../index.html">Table of contents</a></div>
@@ -426,8 +431,7 @@ module.exports = class SnapshotsBook {
                 ${testResultContainers.join('\n')}
             `;
 
-            this.mkDirByPathSync(testResultPagePath);
-            fs.writeFileSync(path.join(testResultPagePath, 'index.html'), this.getHTMLPage(name, this.mainCss, this.mainJs, html));
+            fs.writeFile(path.join(testResultPagePath, 'index.html'), this.getHTMLPage(name, this.mainCss, this.mainJs, html));
 
             toc.push({ base, name });
 
@@ -460,13 +464,12 @@ module.exports = class SnapshotsBook {
                     <h1>The book of snapshots</h1>\n
                     <h3 class="SubHeader">Table of contents</h3>\n
                     <div class="TOCContainer">\n
-                        ${toc.sort().map(t => `<a href="${t.name}/index.html">${t.name}</a>`).join('\n')}
+                        ${toc.sort((a, b) => a.name > b.name ? 1 : a.name < b.name ? -1 : 0).map(t => `<a href="${t.name}/index.html">${t.name}</a>`).join('\n')}
                     </div>
                `;
-            this.mkDirByPathSync(this.bookDir);
-            fs.writeFileSync(path.join(this.bookDir, 'index.html'), this.getHTMLPage('The book of snapshots', this.mainCss, null, html));
+            fs.writeFile(path.join(this.bookDir, 'index.html'), this.getHTMLPage('The book of snapshots', this.mainCss, null, html));
         } else {
-            fs.writeFileSync(path.join(this.bookDir, 'index.html'), 'No snapshots found.');
+            fs.writeFile(path.join(this.bookDir, 'index.html'), 'No snapshots found.');
         }
 
         this.log('Jest-snapshots-book finished.');

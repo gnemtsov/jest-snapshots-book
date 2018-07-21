@@ -195,9 +195,10 @@ module.exports = class SnapshotsBook {
 
     onRunComplete(contexts, results) {
         this.log('\nJest-snapshots-book reporter is running...\n');
-        this.emptyDirSync(this.bookDir);
+        this.mkDirByPathSync(this.bookDir);
 
         let toc = [];
+
         let iFrameContentCss = `
             .LNum {
                 color: #666;
@@ -232,6 +233,11 @@ module.exports = class SnapshotsBook {
             }
 
             this.log(`Process test file ${chalk.bgGreen.black(base)}`);
+
+            //Clear dir
+            const testResultPagePath = path.join(this.bookDir, name);
+            this.emptyDirSync(testResultPagePath);
+            this.mkDirByPathSync(testResultPagePath);
 
             //CSS of IFrame content (contains grabbed css + additional styles)
             this.log('Grab styles');
@@ -342,7 +348,7 @@ module.exports = class SnapshotsBook {
                 this.mkDirByPathSync(testPath);
 
                 //-----> output expected
-                fs.writeFileSync(
+                fs.writeFile(
                     path.join(testPath, 'expectedHtml.html'),
                     this.getHTMLPage(
                         name,
@@ -352,7 +358,7 @@ module.exports = class SnapshotsBook {
                     )
                 );
 
-                fs.writeFileSync(
+                fs.writeFile(
                     path.join(testPath, 'expectedRaw.html'),
                     this.getHTMLPage(
                         name,
@@ -378,7 +384,7 @@ module.exports = class SnapshotsBook {
                 //-----> output actual
                 let actualContainerHtml = '';
                 if (result.status === 'failed') {
-                    fs.writeFileSync(
+                    fs.writeFile(
                         path.join(testPath, 'actualHtml.html'),
                         this.getHTMLPage(
                             name,
@@ -388,7 +394,7 @@ module.exports = class SnapshotsBook {
                         )
                     );
 
-                    fs.writeFileSync(
+                    fs.writeFile(
                         path.join(testPath, 'actualRaw.html'),
                         this.getHTMLPage(
                             name,
@@ -402,7 +408,7 @@ module.exports = class SnapshotsBook {
                         )
                     );
 
-                    fs.writeFileSync(
+                    fs.writeFile(
                         path.join(testPath, 'actualDiff.html'),
                         this.getHTMLPage(
                             name,
@@ -447,7 +453,6 @@ module.exports = class SnapshotsBook {
             });
 
             //-----> output index.html with all testResultContainers
-            const testResultPagePath = path.join(this.bookDir, name);
             this.log(`Write page with test results to ${path.join(testResultPagePath, 'index.html')}\n`);
             const html = `
                 <div><a href="../index.html">Table of contents</a></div>
@@ -461,8 +466,7 @@ module.exports = class SnapshotsBook {
                 ${testResultContainers.join('\n')}
             `;
 
-            this.mkDirByPathSync(testResultPagePath);
-            fs.writeFileSync(
+            fs.writeFile(
                 path.join(testResultPagePath, 'index.html'),
                 this.getHTMLPage(
                     name,
@@ -504,13 +508,12 @@ module.exports = class SnapshotsBook {
                     <h3 class="SubHeader">Table of contents</h3>\n
                     <div class="TOCContainer">\n
                         ${toc
-                            .sort()
-                            .map(t => `<a href="${t.name}/index.html">${t.name}</a>`)
-                            .join('\n')}
+                    .sort((a, b) => a.name > b.name ? 1 : (a.name < b.name ? -1 : 0))
+                    .map(t => `<a href="${t.name}/index.html">${t.name}</a>`)
+                    .join('\n')}
                     </div>
                `;
-            this.mkDirByPathSync(this.bookDir);
-            fs.writeFileSync(
+            fs.writeFile(
                 path.join(this.bookDir, 'index.html'),
                 this.getHTMLPage(
                     'The book of snapshots',
@@ -520,7 +523,7 @@ module.exports = class SnapshotsBook {
                 )
             );
         } else {
-            fs.writeFileSync(
+            fs.writeFile(
                 path.join(this.bookDir, 'index.html'),
                 'No snapshots found.'
             );
