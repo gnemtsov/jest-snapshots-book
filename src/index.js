@@ -81,8 +81,6 @@ module.exports = class SnapshotsBook {
                 });               
             });
         `;
-
-        //        this.dumpSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJmZWF0aGVyIGZlYXRoZXItY2FtZXJhIj48cGF0aCBkPSJNMjMgMTlhMiAyIDAgMCAxLTIgMkgzYTIgMiAwIDAgMS0yLTJWOGEyIDIgMCAwIDEgMi0yaDRsMi0zaDZsMiAzaDRhMiAyIDAgMCAxIDIgMnoiPjwvcGF0aD48Y2lyY2xlIGN4PSIxMiIgY3k9IjEzIiByPSI0Ij48L2NpcmNsZT48L3N2Zz4=';
     }
 
     log(message) {
@@ -185,12 +183,6 @@ module.exports = class SnapshotsBook {
             }
         }
         return css;
-    }
-
-    onTestResult(test, testResult, aggregatedResult) {
-        //    fs.writeFileSync(path.join(this.bookDir, `test.json`), JSON.stringify(test));
-        //    fs.writeFileSync(path.join(this.bookDir, `testResult.json`), JSON.stringify(testResult));
-        //    fs.writeFileSync(path.join(this.bookDir, `aggregatedResult.json`), JSON.stringify(aggregatedResult));
     }
 
     onRunComplete(contexts, results) {
@@ -477,27 +469,6 @@ module.exports = class SnapshotsBook {
             );
 
             toc.push({ base, name });
-
-            /*             const tests = Object.keys(snapshots);
-                        if (tests.length) {
-                            content += tests.map(
-                                test => `
-                                    <div style="margin-top: 1.5rem;">
-                                        <div style="background-color: #d6cfcf; padding: 0.6rem; margin-bottom: 0.6rem;">${test}</div>\n
-                                        ${snapshots[test]
-                                        .replace(/src=".+"/g, `src="${this.dumpSvg}"`)
-                                        .replace(/className="/g, `class="`)}
-                                    </div>
-                                `
-                            ).join('\n\n');
-            
-                            fs.writeFileSync(path.join(this.bookDir, `${base}.html`), this.getHTMLPage(name, css.join(''), content));
-                        } else {
-                            try {
-                                fs.unlinkSync(path.join(this.bookDir, `${base}.html`));
-                            } catch (e) { }
-                        }
-             */
         }
 
         //-----> output table of contents
