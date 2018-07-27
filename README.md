@@ -2,7 +2,7 @@
 
 Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots. It is designed for snapshot testing React components.
 
-Jest-snapshots-book reporter recursivly goes through the tested component and all its' parents and grabs all styles. Grabbed styles are inserted in the component page so that you can see styled React component there. 
+Jest-snapshots-book reporter recursively goes through the tested component and all its' parents and grabs all styles. Grabbed styles are inserted in the component page so that you can see styled React component there. 
 
 The reporter takes raw **expected** snapshot content from a component .snap file. Then it makes the **actual** snapshot by applying diff from a failed test result to the expected snapshot.
 
