@@ -1,6 +1,6 @@
 {
   "name": "jest-snapshots-book",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Build a collection of html representations of jest snapshots for each test file",
   "main": "build/index.js",
   "scripts": {
