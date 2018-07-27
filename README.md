@@ -1,5 +1,9 @@
 # Jest-snapshots-book
 
+![npm](https://img.shields.io/npm/v/jest-snapshots-book.svg)
+![npm](https://img.shields.io/npm/dw/jest-snapshots-book.svg)
+![npm](https://img.shields.io/npm/l/jest-snapshots-book.svg)
+
 Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots. It is designed for snapshot testing React components.
 
 Jest-snapshots-book reporter recursively goes through the tested component and all its' parents and grabs all styles. Grabbed styles are inserted in the component page so that you can see styled React component there. 
