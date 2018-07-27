@@ -1,17 +1,48 @@
 # Jest-snapshots-book
 
-Custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots. 
+Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots. 
 
 Each time when jest is run this reporter will produce a book of snapshots with table of contents. The book will be placed in the folder "snapshots-book" in the root of your project. 
 
 ![Book example](snapshots-book-example.jpg)
 
-You can check up your snapshots in the browser instead of manually listing them in a code editor. For React components all styles (including those from css-modules) will be applied, so that you can see styled components in your browser.
+You can check out your snapshots in the browser instead of manually listing them in your code editor. Moreover for React components all styles (including those from css-modules) will be applied, so that you can see styled components in your browser.
 
-Here is an example of snapshots for paginator React component. Clicking on the snapshot toggles its representation: rendered - raw - diff.
+Here is an example of a test file for a paginator React component:
+
+```jsx
+import React from 'react';
+
+import { configure, render } from 'enzyme';
+import Adapter from 'enzyme-adapter-react-16';
+
+import Paginator from './Paginator';
+
+configure({ adapter: new Adapter() });
+
+describe('Paginator', () => {
+    const snapshoot = (tp, cp) => {
+        const wrapper = render(<Paginator tp={tp} cp={cp} />);
+        it(`Total = ${tp}, Current = ${cp}`, () => {
+            expect(wrapper).toMatchSnapshot();
+        });
+    }
+
+    snapshoot(0, 0);
+    snapshoot(1, -1);
+    snapshoot(1, 1);
+    snapshoot(2, 2);
+    snapshoot(3, 1);
+
+    for (let cp = 1; cp <= 10; cp++) {
+        snapshoot(10, cp);
+    }
+});
+```
+
+Here is the result produced by jest-snapshots-book reporter. If a test passed only one snapshot is shown because expected and actual snapshots are the same. If a test failed expected and actual snapshots are shown side by side. Clicking on the snapshot toggles its' representation (rendered, raw, diff).
 
 ![Demo](demo.gif)
-
 
 # Usage
 
@@ -20,7 +51,7 @@ Install as a dev dependency
 $ npm install --save-dev jest-snapshots-book
 ```
 
-Add reporter after the default jest reporter in jest configuration file:
+Add the reporter after the default jest reporter in the configuration file:
 ```
 "reporters": [
     "default",
@@ -44,4 +75,4 @@ To enable verbose mode of the reporter pass "verbose": true as additional parame
     "default",
     ["jest-snapshots-book", {"verbose": true}]
 ]
-```   
+```
