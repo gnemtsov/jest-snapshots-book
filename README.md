@@ -50,7 +50,7 @@ Here is the result produced by jest-snapshots-book reporter. If a test passed on
 
 # Usage
 
-Install as a dev dependency
+Install as a dev dependency:
 ```
 $ npm install --save-dev jest-snapshots-book
 ```
@@ -73,7 +73,7 @@ Add the reporter directory to ignored paths:
 ]
 ```
 
-To enable verbose mode of the reporter pass "verbose": true as additional parameter when initializing the reporter:
+To enable verbose mode of the reporter pass `"verbose": true` as an additional parameter when initializing the reporter:
 ```
 "reporters": [
     "default",
