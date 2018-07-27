@@ -2,13 +2,15 @@
 
 Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots.
 
-Jest-snapshots-book reporter recursivly goes through the tested component and all its' parents and grabs all styles. Grabbed styles are inserted in the component page. The reporter takes raw **expected** snapshot content from a component .snap file. Then it makes the **actual** snapshot by applying diff from a failed test result to the expected snapshot.
+Jest-snapshots-book reporter recursivly goes through the tested component and all its' parents and grabs all styles (including those from css-modules). This is specifically good for testing React components. Grabbed styles are inserted in the component page and you can see styled React component there. 
+
+The reporter takes raw **expected** snapshot content from a component .snap file. Then it makes the **actual** snapshot by applying diff from a failed test result to the expected snapshot.
 
 Each time when jest is run this reporter will produce a book of snapshots with table of contents. The book will be placed in the folder "snapshots-book" in the root of your project.
 
 ![Book example](snapshots-book-example.jpg)
 
-You can check out your snapshots in the browser instead of manually listing them in your code editor. Moreover for React components all styles (including those from css-modules) will be applied, so that you can see styled components in your browser.
+You can check out your snapshots in the browser instead of manually listing them in your code editor.
 
 Here is an example of a test file for a paginator React component:
 
