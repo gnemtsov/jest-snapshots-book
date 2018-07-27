@@ -1,8 +1,10 @@
 # Jest-snapshots-book
 
-Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots. 
+Jest-snapshots-book is a custom [jest](https://jestjs.io/) reporter that builds html representations of snapshots.
 
-Each time when jest is run this reporter will produce a book of snapshots with table of contents. The book will be placed in the folder "snapshots-book" in the root of your project. 
+Jest-snapshots-book reporter recursivly goes through the tested component and all its' parents and grabs all styles. Grabbed styles are inserted in the component page. The reporter takes raw **expected** snapshot content from a component .snap file. Then it makes the **actual** snapshot by applying diff from a failed test result to the expected snapshot.
+
+Each time when jest is run this reporter will produce a book of snapshots with table of contents. The book will be placed in the folder "snapshots-book" in the root of your project.
 
 ![Book example](snapshots-book-example.jpg)
 
